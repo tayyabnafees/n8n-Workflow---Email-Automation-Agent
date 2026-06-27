@@ -1,0 +1,343 @@
+{
+  "name": "AI Email Agent",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "20cf69be-7b39-4daa-ada1-28343d432ac7",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1jX3na5tJu2r48aU87O9Bz5zCySQUSUjHvolRooqtD-E",
+          "mode": "id",
+          "cachedResultName": "New Sheet"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1jX3na5tJu2r48aU87O9Bz5zCySQUSUjHvolRooqtD-E/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Status",
+              "lookupValue": "Pending"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "17d4e962-f403-4103-8075-04cfdf14d5d9",
+      "name": "Read Pending Rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        112
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ftIMnH4aKm03c4tl",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Write a professional outreach email to the following contact:\n\nName: {{ $json.Name }}\nCompany: {{ $json.Company }}\nPurpose: {{ $json.Purpose }}\n\nRespond ONLY with valid JSON in this exact format — no markdown, no extra text:\n{\n  \"subject\": \"<compelling subject line>\",\n  \"body\": \"<complete HTML email — see requirements below>\"\n}\n\nHTML email requirements:\n- Use inline CSS only (no <style> tags, no external CSS)\n- Wrapper: <div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a; line-height: 1.7; font-size: 15px;\">\n- Greeting and each paragraph wrapped in <p style=\"margin: 0 0 16px 0;\">\n- A <hr style=\"border: none; border-top: 1px solid #e0e0e0; margin: 24px 0;\"> before the signature\n- Signature block using these fictional but realistic sender details:\n  Name: James Whitfield\n  Title: Head of Partnerships\n  Company: NovaBridge Solutions\n  Email: j.whitfield@novabridge.io\n  Phone: +1 (415) 882-3301\n- Signature formatted as:\n  <p style=\"margin:0;font-size:14px;color:#1a1a1a;\"><strong>James Whitfield</strong></p>\n  <p style=\"margin:2px 0;font-size:13px;color:#555;\">Head of Partnerships — NovaBridge Solutions</p>\n  <p style=\"margin:2px 0;font-size:13px;color:#555;\">j.whitfield@novabridge.io | +1 (415) 882-3301</p>\n- The email body must read as written by a real person — warm, specific, no generic filler phrases\n- 2–3 short focused paragraphs only\n- Do NOT use placeholder text like [Your Name] or [Your Company] anywhere",
+        "options": {
+          "systemMessage": "You are James Whitfield, Head of Partnerships at NovaBridge Solutions. You write sharp, human-sounding outreach emails that feel personal and credible — never robotic or templated. You always use the real sender details provided and never leave placeholder brackets. Respond with valid JSON only."
+        }
+      },
+      "id": "3e097c22-8e62-4fd6-834d-bad5591f58ad",
+      "name": "Generate Email Content",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        448,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4o-mini",
+        "options": {}
+      },
+      "id": "c35e1a8d-94c5-4b7b-becb-80dc31353da8",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        528,
+        336
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "U6cyWtu1KLeZQZpy",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst items = $input.all();\nconst results = [];\n\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  const originalRow = $('Read Pending Rows').all()[i].json;\n\n  // Skip rows with no email address\n  if (!originalRow.Email || !originalRow.Email.trim()) continue;\n\n  let output;\n  try {\n    const raw = item.json.output || '';\n    const cleaned = raw.replace(/^```json\\n?/, '').replace(/```$/, '').trim();\n    output = JSON.parse(cleaned);\n  } catch (e) {\n    output = { subject: 'Follow-up', body: item.json.output || '' };\n  }\n\n  const now = new Date();\n  const sentDate = now.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });\n  const sentTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });\n\n  results.push({\n    json: {\n      Name: originalRow.Name,\n      Email: originalRow.Email,\n      Company: originalRow.Company,\n      Purpose: originalRow.Purpose,\n      Subject: output.subject,\n      Body: output.body,\n      SentDate: sentDate,\n      SentTime: sentTime,\n    }\n  });\n}\n\nreturn results;\n"
+      },
+      "id": "5da102cf-bb4d-4a56-98be-e4c57897c66b",
+      "name": "Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.Email.split(\",\")[0].trim() }}",
+        "subject": "={{ $json.Subject }}",
+        "message": "={{ $json.Body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "6470101f-96bf-400f-83cf-11d605c0705e",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1024,
+        112
+      ],
+      "webhookId": "fd1658fb-1be3-4ef2-8099-1db432b1a619",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "268o4Kf9Xsla9I5A",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1jX3na5tJu2r48aU87O9Bz5zCySQUSUjHvolRooqtD-E",
+          "mode": "id",
+          "cachedResultName": "New Sheet"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1jX3na5tJu2r48aU87O9Bz5zCySQUSUjHvolRooqtD-E/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email": "={{ $('Parse AI Response').item.json.Email }}",
+            "Subject": "={{ $('Parse AI Response').item.json.Subject }}",
+            "Body": "={{ $('Parse AI Response').item.json.Body }}",
+            "Sent Date": "={{ $('Parse AI Response').item.json.SentDate }}",
+            "Sent Time": "={{ $('Parse AI Response').item.json.SentTime }}",
+            "Status": "Sent"
+          },
+          "matchingColumns": [
+            "Email"
+          ],
+          "schema": [
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Company",
+              "displayName": "Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Purpose",
+              "displayName": "Purpose",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Subject",
+              "displayName": "Subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Body",
+              "displayName": "Body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Sent Time",
+              "displayName": "Sent Time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Sent Date",
+              "displayName": "Sent Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "791daedd-fafd-4617-aaf2-5ff85752f709",
+      "name": "Update Sheet Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1248,
+        112
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ftIMnH4aKm03c4tl",
+          "name": "Google Sheets account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Pending Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Pending Rows": {
+      "main": [
+        [
+          {
+            "node": "Generate Email Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Email Content": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Email Content",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Update Sheet Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "fe2b2971-9f73-49bf-9fee-a5ac33c780e2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a1536a24ddbe93d7394f9ecedc8d6d3869af47fc0a38ecc7cfa0b842393617a2"
+  },
+  "nodeGroups": [],
+  "id": "t331npX3E8YXGLHB",
+  "tags": []
+}
